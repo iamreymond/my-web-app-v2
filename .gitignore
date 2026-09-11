@@ -1,0 +1,24 @@
+# Dependencies / installed packages
+node_modules/
+
+# Environment variables and secrets
+.env
+.env.*
+
+# Allow example environment files
+!.env.example
+
+# Build output / generated frontend build
+dist/
+build/
+
+# Logs / runtime / development logs
+*.log
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+
+# Editor-specific files
+.vscode/
+.idea/
