@@ -1,0 +1,51 @@
+import UserForm from '../components/UserForm.jsx'
+
+function Users({ users, onCreateUser }) {
+    return (
+        <div>
+            <div className="page-header">
+                <div>
+                    <h2>Users</h2>
+                    <p>
+                        Manage users available for task assignment.
+                    </p>
+                </div>
+            </div>
+
+            <div className="content-grid">
+                <UserForm
+                    onCreateUser={onCreateUser}
+                />
+
+                <div className="card">
+                    <h3>User List</h3>
+
+                    {users.length === 0 ? (
+                        <p className="empty-state">
+                            No users found.
+                        </p>
+                    ) : (
+                        <div className="list">
+                            {users.map(user => (
+                                <div
+                                    className="list-item"
+                                    key={user.id}
+                                >
+                                    <strong>
+                                        {user.name}
+                                    </strong>
+
+                                    <span>
+                                        {user.email}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    )
+}
+
+export default Users
