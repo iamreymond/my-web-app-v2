@@ -246,3 +246,32 @@ textarea {
     flex-direction: column;
   }
 }
+
+/* Shared feedback and controls keep every page consistent and keyboard accessible. */
+fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+button, select { min-height: 44px; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 3px solid #275dad; outline-offset: 3px;
+}
+button:disabled, select:disabled { cursor: wait; opacity: .65; }
+.form button { background: #275dad; color: white; }
+.form button:hover:not(:disabled) { background: #1c467f; }
+.form-hint, .demo-notice { color: #555; font-size: .9rem; }
+.demo-notice { margin: 0 0 24px; }
+.message { padding: 12px 16px; border-radius: 6px; overflow-wrap: anywhere; }
+.message-error { background: #fce8e6; color: #8b1a15; }
+.message-success { background: #e3f2e7; color: #20552d; }
+.status-feedback { min-height: 1.5em; }
+.priority { padding: 4px 10px; border-radius: 6px; width: fit-content; }
+.priority-high { background: #fce8e6; color: #8b1a15; }
+.priority-medium { background: #fff3cd; color: #654d00; }
+.priority-low { background: #e3f2e7; color: #20552d; }
+/* Long user content must wrap instead of widening the page on small screens. */
+.card, .form, .task-header > div { min-width: 0; overflow-wrap: anywhere; }
+.task-header p { white-space: pre-wrap; }
+.task-meta { align-items: flex-start; flex-wrap: wrap; }
+@media (max-width: 400px) {
+  .container { padding: 24px 16px; }
+  .app-header { padding: 16px; }
+  .card, .form { padding: 16px; }
+}

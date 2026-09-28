@@ -1,27 +1,54 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import * as api from './services/api.js'
+import DataState from './components/DataState.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Users from './pages/Users.jsx'
 import Tasks from './pages/Tasks.jsx'
-import {
-    initialUsers,
-    initialTasks,
-} from './data/mockData.js'
 
 function App() {
+    // All pages share the latest records returned by the API; PostgreSQL owns persistence.
     const [currentPage, setCurrentPage] =
         useState('dashboard')
 
     const [users, setUsers] =
-        useState(initialUsers)
+        useState([])
 
     const [tasks, setTasks] =
-        useState(initialTasks)
+        useState([])
 
-    function createUser(user) {
-        const newUser = {
-            id: Date.now(),
-            ...user,
+    const [isLoading, setIsLoading] = useState(true)
+    const [loadError, setLoadError] = useState('')
+    const [loadAttempt, setLoadAttempt] = useState(0)
+
+    // Load both collections together so assignment names and dashboard counts agree.
+    useEffect(() => {
+        const controller = new AbortController()
+        async function loadApplicationData() {
+            setIsLoading(true)
+            setLoadError('')
+            try {
+                const [savedUsers, savedTasks] = await Promise.all([
+                    api.getUsers(controller.signal),
+                    api.getTasks(controller.signal),
+                ])
+                if (!controller.signal.aborted) {
+                    setUsers(savedUsers)
+                    setTasks(savedTasks)
+                }
+            } catch (error) {
+                if (!controller.signal.aborted) setLoadError(error.message)
+            } finally {
+                if (!controller.signal.aborted) setIsLoading(false)
+            }
         }
+        loadApplicationData()
+        // Prevent stale responses during unmount and React StrictMode's development checks.
+        return () => controller.abort()
+    }, [loadAttempt])
+
+    // Only update shared state after the server confirms a save; forms handle failures.
+    async function createUser(user) {
+        const newUser = await api.createUser(user)
 
         setUsers(currentUsers => [
             ...currentUsers,
@@ -29,12 +56,8 @@ function App() {
         ])
     }
 
-    function createTask(task) {
-        const newTask = {
-            id: Date.now(),
-            status: 'Open',
-            ...task,
-        }
+    async function createTask(task) {
+        const newTask = await api.createTask(task)
 
         setTasks(currentTasks => [
             ...currentTasks,
@@ -42,11 +65,12 @@ function App() {
         ])
     }
 
-    function changeTaskStatus(taskId, status) {
+    async function changeTaskStatus(taskId, status) {
+        const updatedTask = await api.updateTaskStatus(taskId, status)
         setTasks(currentTasks =>
             currentTasks.map(task =>
                 task.id === taskId
-                    ? { ...task, status }
+                    ? updatedTask
                     : task
             )
         )
@@ -91,8 +115,9 @@ function App() {
                     <span>Work Tracker</span>
                 </div>
 
-                <nav>
+                <nav aria-label="Main navigation">
                     <button
+                        aria-current={currentPage === 'dashboard' ? 'page' : undefined}
                         className={
                             currentPage === 'dashboard'
                                 ? 'nav-active'
@@ -106,6 +131,7 @@ function App() {
                     </button>
 
                     <button
+                        aria-current={currentPage === 'users' ? 'page' : undefined}
                         className={
                             currentPage === 'users'
                                 ? 'nav-active'
@@ -119,6 +145,7 @@ function App() {
                     </button>
 
                     <button
+                        aria-current={currentPage === 'tasks' ? 'page' : undefined}
                         className={
                             currentPage === 'tasks'
                                 ? 'nav-active'
@@ -134,7 +161,13 @@ function App() {
             </header>
 
             <main className="container">
-                {renderPage()}
+                <DataState
+                    isLoading={isLoading}
+                    error={loadError}
+                    onRetry={() => setLoadAttempt(attempt => attempt + 1)}
+                >
+                    {renderPage()}
+                </DataState>
             </main>
 
             <footer className="app-footer">

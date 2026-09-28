@@ -1,0 +1,191 @@
+const { test, before, after, beforeEach, afterEach } = require('node:test')
+const assert = require('node:assert/strict')
+const app = require('../server')
+const pool = require('../config/database')
+
+let server
+let baseUrl
+let queryMock
+
+// Exercise real HTTP parsing and routing while keeping tests independent of PostgreSQL.
+before(async () => {
+    server = app.listen(0, '127.0.0.1')
+    await new Promise(resolve => server.once('listening', resolve))
+    baseUrl = `http://127.0.0.1:${server.address().port}`
+})
+
+beforeEach(context => {
+    queryMock = context.mock.method(pool, 'query', async () => {
+        throw new Error('Unexpected database query')
+    })
+    context.mock.method(console, 'error', () => {})
+})
+
+afterEach(() => queryMock.mock.restore())
+after(async () => {
+    await new Promise(resolve => server.close(resolve))
+    await pool.end()
+})
+
+async function request(path, method = 'GET', body) {
+    const response = await fetch(`${baseUrl}${path}`, {
+        method,
+        headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+        body: body === undefined ? undefined : JSON.stringify(body),
+    })
+    assert.match(response.headers.get('content-type'), /application\/json/)
+    return { status: response.status, body: await response.json() }
+}
+
+test('user validation rejects invalid fields without querying PostgreSQL', async () => {
+    for (const body of [
+        {}, { name: 3, email: 'a@example.com' },
+        { name: '   ', email: 'a@example.com' },
+        { name: 'a'.repeat(101), email: 'a@example.com' },
+        { name: 'A', email: null }, { name: 'A', email: 'invalid' },
+        { name: 'A', email: `${'a'.repeat(250)}@example.com` },
+    ]) {
+        assert.equal((await request('/api/users', 'POST', body)).status, 400)
+    }
+    assert.equal(queryMock.mock.callCount(), 0)
+})
+
+test('user creation normalizes input and returns the created record', async () => {
+    const user = { id: 1, name: 'Alice', email: 'alice@example.com', createdAt: '2026-09-28' }
+    queryMock.mock.mockImplementation(async (sql, values) => {
+        assert.match(sql, /created_at AS "createdAt"/)
+        assert.deepEqual(values, ['Alice', 'alice@example.com'])
+        return { rows: [user] }
+    })
+    assert.deepEqual(await request('/api/users', 'POST', {
+        name: ' Alice ', email: ' ALICE@example.com ',
+    }), { status: 201, body: user })
+})
+
+test('duplicate email returns 409', async () => {
+    queryMock.mock.mockImplementation(async () => { throw { code: '23505' } })
+    assert.equal((await request('/api/users', 'POST', { name: 'A', email: 'a@example.com' })).status, 409)
+})
+
+test('task validation rejects invalid fields before any query', async () => {
+    for (const fields of [
+        { title: null }, { title: 42 }, { title: ' ' }, { title: 'a'.repeat(201) },
+        { description: null }, { description: {} }, { priority: 'Urgent' },
+        { userId: '1' }, { userId: 0 }, { userId: -1 }, { userId: 1.5 },
+        { userId: 2147483648 },
+    ]) {
+        assert.equal((await request('/api/tasks', 'POST', { title: 'Task', ...fields })).status, 400)
+    }
+    assert.equal(queryMock.mock.callCount(), 0)
+})
+
+test('task creation applies defaults and uses SQL parameters', async () => {
+    const task = { id: 1, title: "Task ' title", description: '', priority: 'Medium', status: 'Open', userId: null }
+    queryMock.mock.mockImplementation(async (sql, values) => {
+        assert.match(sql, /VALUES \(\$1, \$2, \$3, \$4\)/)
+        assert.deepEqual(values, ["Task ' title", '', 'Medium', null])
+        return { rows: [task] }
+    })
+    assert.deepEqual(await request('/api/tasks', 'POST', { title: " Task ' title " }), { status: 201, body: task })
+})
+
+test('assigned task checks the user and preserves their numeric ID', async () => {
+    queryMock.mock.mockImplementation(async (sql, values) => {
+        if (sql.startsWith('SELECT id FROM users')) {
+            assert.deepEqual(values, [2])
+            return { rows: [{ id: 2 }] }
+        }
+        assert.deepEqual(values, ['Task', 'Details', 'High', 2])
+        return { rows: [{ id: 1, userId: 2 }] }
+    })
+    assert.equal((await request('/api/tasks', 'POST', {
+        title: 'Task', description: ' Details ', priority: 'High', userId: 2,
+    })).status, 201)
+    assert.equal(queryMock.mock.callCount(), 2)
+})
+
+test('missing assigned user and assignment race both return 400', async () => {
+    queryMock.mock.mockImplementation(async () => ({ rows: [] }))
+    assert.equal((await request('/api/tasks', 'POST', { title: 'Task', userId: 5 })).status, 400)
+    queryMock.mock.mockImplementation(async sql => {
+        if (sql.startsWith('SELECT')) return { rows: [{ id: 5 }] }
+        throw { code: '23503' }
+    })
+    assert.equal((await request('/api/tasks', 'POST', { title: 'Task', userId: 5 })).status, 400)
+})
+
+test('status update rejects malformed IDs and unsupported statuses', async () => {
+    for (const id of ['abc', '0', '-1', '1.5', '2147483648']) {
+        assert.equal((await request(`/api/tasks/${id}/status`, 'PATCH', { status: 'Open' })).status, 400)
+    }
+    assert.equal((await request('/api/tasks/1/status', 'PATCH', { status: 'Done' })).status, 400)
+    assert.equal(queryMock.mock.callCount(), 0)
+})
+
+test('status update handles every supported status and missing tasks', async () => {
+    for (const status of ['Open', 'In Progress', 'Completed']) {
+        queryMock.mock.mockImplementation(async (sql, values) => {
+            assert.match(sql, /updated_at = CURRENT_TIMESTAMP/)
+            assert.deepEqual(values, [status, 1])
+            return { rows: [{ id: 1, status }] }
+        })
+        assert.deepEqual(await request('/api/tasks/1/status', 'PATCH', { status }), {
+            status: 200, body: { id: 1, status },
+        })
+    }
+    queryMock.mock.mockImplementation(async () => ({ rows: [] }))
+    assert.equal((await request('/api/tasks/99/status', 'PATCH', { status: 'Open' })).status, 404)
+})
+
+test('list routes return populated and empty arrays', async () => {
+    for (const path of ['/api/users', '/api/tasks']) {
+        for (const rows of [[], [{ id: 1 }]]) {
+            queryMock.mock.mockImplementation(async () => ({ rows }))
+            assert.deepEqual(await request(path), { status: 200, body: rows })
+        }
+    }
+})
+
+test('request parser failures and unknown routes remain JSON', async () => {
+    for (const path of ['/api/users', '/api/tasks', '/api/tasks/1/status']) {
+        const method = path.endsWith('/status') ? 'PATCH' : 'POST'
+        for (const body of [[], null, 'text', 1]) {
+            assert.equal((await request(path, method, body)).status, 400)
+        }
+        assert.equal((await request(path, method)).status, 415)
+    }
+    for (const [body, status] of [['{', 400], [JSON.stringify({ title: 'a'.repeat(110000) }), 413]]) {
+        const response = await fetch(`${baseUrl}/api/tasks`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
+        })
+        assert.equal(response.status, status)
+        assert.equal(typeof (await response.json()).error, 'string')
+    }
+    assert.equal((await request('/api/missing')).status, 404)
+    assert.equal(queryMock.mock.callCount(), 0)
+})
+
+test('database failures do not expose internal error details', async () => {
+    queryMock.mock.mockImplementation(async () => { throw new Error('private database details') })
+    for (const [path, method, body] of [
+        ['/api/users', 'GET'], ['/api/tasks', 'GET'],
+        ['/api/users', 'POST', { name: 'A', email: 'a@example.com' }],
+        ['/api/tasks', 'POST', { title: 'Task' }],
+        ['/api/tasks/1/status', 'PATCH', { status: 'Open' }],
+    ]) {
+        assert.deepEqual(await request(path, method, body), {
+            status: 500, body: { error: 'An unexpected server error occurred' },
+        })
+    }
+})
+
+test('health returns 200 when available and 503 on database failure', async () => {
+    queryMock.mock.mockImplementation(async () => ({ rows: [{ now: '2026-09-28' }] }))
+    const healthy = await request('/api/health')
+    assert.equal(healthy.status, 200)
+    assert.equal(healthy.body.database, 'connected')
+    queryMock.mock.mockImplementation(async () => { throw { code: '28P01' } })
+    assert.deepEqual(await request('/api/health'), {
+        status: 503, body: { status: 'error', error: 'Database connection failed' },
+    })
+})

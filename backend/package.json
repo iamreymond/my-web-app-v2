@@ -2,9 +2,12 @@
   "name": "backend",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node --env-file=.env server.js",
+    "test": "node --test",
+    "db:check": "node --env-file=.env scripts/check-database.js",
+    "db:init": "node --env-file=.env scripts/init-database.js"
   },
   "keywords": [],
   "author": "",
