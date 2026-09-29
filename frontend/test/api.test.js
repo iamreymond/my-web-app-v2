@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import * as api from '../src/services/api.js'
 
-const user = { id: 1, name: 'Test User', email: 'test@example.invalid' }
+const user = { id: 1, name: 'Test User', email: 'test@example.invalid', role: 'user' }
 const task = { id: 2, title: 'Test Task', description: '', status: 'Open', priority: 'Medium', userId: 1 }
 
 test('loads valid records and rejects incompatible responses', async context => {
@@ -21,6 +21,8 @@ test('writes use JSON and the correct REST methods and return saved records', as
     context.mock.method(globalThis, 'fetch', async (url, options) => {
         calls.push({ url, method: options.method, body: JSON.parse(options.body) })
         assert.equal(options.headers['Content-Type'], 'application/json')
+        assert.equal(options.headers['X-Requested-With'], 'WorkTracker')
+        assert.equal(options.credentials, 'same-origin')
         return Response.json(url === '/api/users' ? user : task)
     })
     assert.deepEqual(await api.createUser({ name: user.name, email: user.email }), user)
@@ -64,4 +66,38 @@ test('canceling a page load cancels the fetch signal', async context => {
         throw new DOMException('Aborted', 'AbortError')
     })
     await assert.rejects(api.getUsers(controller.signal), { name: 'AbortError' })
+})
+
+test('restores safe authenticated accounts and unauthenticated sessions', async context => {
+    const fetchMock = context.mock.method(globalThis, 'fetch', async () => Response.json({ user }))
+    assert.deepEqual(await api.getSession(), user)
+    fetchMock.mock.mockImplementation(async () => Response.json({ user: null }))
+    assert.equal(await api.getSession(), null)
+    fetchMock.mock.mockImplementation(async () => Response.json({ user: { ...user, role: 'superuser' } }))
+    await assert.rejects(api.getSession(), /unexpected data/)
+})
+
+test('login and logout use session endpoints and safe responses', async context => {
+    const calls = []
+    context.mock.method(globalThis, 'fetch', async (url, options) => {
+        calls.push({ url, method: options.method })
+        return Response.json(url.endsWith('/login') ? { user } : { message: 'Signed out' })
+    })
+    assert.deepEqual(await api.login({ email: user.email, password: 'test-only-password' }), user)
+    assert.deepEqual(await api.logout(), { message: 'Signed out' })
+    assert.deepEqual(calls, [
+        { url: '/api/auth/login', method: 'POST' },
+        { url: '/api/auth/logout', method: 'POST' },
+    ])
+})
+
+test('expired protected requests notify App while invalid login preserves its form', async context => {
+    const events = []
+    globalThis.window = { dispatchEvent: event => events.push(event.type) }
+    context.after(() => { delete globalThis.window })
+    context.mock.method(globalThis, 'fetch', async () => Response.json({ error: 'Please sign in' }, { status: 401 }))
+    await assert.rejects(api.getTasks(), /Please sign in/)
+    assert.deepEqual(events, ['session-expired'])
+    await assert.rejects(api.login({}), /Please sign in/)
+    assert.deepEqual(events, ['session-expired'])
 })

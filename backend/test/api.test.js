@@ -1,22 +1,42 @@
 const { test, before, after, beforeEach, afterEach } = require('node:test')
 const assert = require('node:assert/strict')
+process.env.NODE_ENV = 'test'
+process.env.SESSION_SECRET = require('node:crypto').randomBytes(48).toString('hex')
+const bcrypt = require('bcryptjs')
+const testPassword = 'unit-test-password-only'
 const app = require('../server')
 const pool = require('../config/database')
 
 let server
 let baseUrl
 let queryMock
+let cookie
 
 // Exercise real HTTP parsing and routing while keeping tests independent of PostgreSQL.
 before(async () => {
     server = app.listen(0, '127.0.0.1')
     await new Promise(resolve => server.once('listening', resolve))
     baseUrl = `http://127.0.0.1:${server.address().port}`
+    const original = pool.query
+    pool.query = async () => ({ rows: [{ id: 900, name: 'Test Admin', email: 'admin@example.invalid', role: 'admin', password_hash: await bcrypt.hash(testPassword, 4) }] })
+    const response = await fetch(baseUrl + '/api/auth/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'WorkTracker' },
+        body: JSON.stringify({ email: 'admin@example.invalid', password: testPassword }),
+    })
+    assert.equal(response.status, 200)
+    cookie = response.headers.get('set-cookie').split(';')[0]
+    pool.query = original
 })
 
 beforeEach(context => {
-    queryMock = context.mock.method(pool, 'query', async () => {
+    queryMock = context.mock.fn(async () => {
         throw new Error('Unexpected database query')
+    })
+    context.mock.method(pool, 'query', (sql, values) => {
+        if (sql.includes('WHERE id = $1 AND password_hash IS NOT NULL')) {
+            return Promise.resolve({ rows: [{ id: 900, name: 'Test Admin', email: 'admin@example.invalid', role: 'admin' }] })
+        }
+        return queryMock(sql, values)
     })
     context.mock.method(console, 'error', () => {})
 })
@@ -28,9 +48,12 @@ after(async () => {
 })
 
 async function request(path, method = 'GET', body) {
+    if (path === '/api/users' && method === 'POST' && body && !Array.isArray(body) && typeof body === 'object') {
+        body = { password: testPassword, role: 'user', ...body }
+    }
     const response = await fetch(`${baseUrl}${path}`, {
         method,
-        headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+        headers: { Cookie: cookie, 'X-Requested-With': 'WorkTracker', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
         body: body === undefined ? undefined : JSON.stringify(body),
     })
     assert.match(response.headers.get('content-type'), /application\/json/)
@@ -54,7 +77,9 @@ test('user creation normalizes input and returns the created record', async () =
     const user = { id: 1, name: 'Alice', email: 'alice@example.com', createdAt: '2026-09-28' }
     queryMock.mock.mockImplementation(async (sql, values) => {
         assert.match(sql, /created_at AS "createdAt"/)
-        assert.deepEqual(values, ['Alice', 'alice@example.com'])
+        assert.deepEqual(values.slice(0, 2), ['Alice', 'alice@example.com'])
+        assert.equal(await bcrypt.compare(testPassword, values[2]), true)
+        assert.equal(values[3], 'user')
         return { rows: [user] }
     })
     assert.deepEqual(await request('/api/users', 'POST', {
@@ -65,6 +90,16 @@ test('user creation normalizes input and returns the created record', async () =
 test('duplicate email returns 409', async () => {
     queryMock.mock.mockImplementation(async () => { throw { code: '23505' } })
     assert.equal((await request('/api/users', 'POST', { name: 'A', email: 'a@example.com' })).status, 409)
+})
+
+test('account creation rejects invalid passwords and roles before SQL', async () => {
+    for (const fields of [
+        { password: '' }, { password: null }, { password: 'short' },
+        { password: 'a'.repeat(73) }, { password: '😀'.repeat(19) }, { role: 'superuser' },
+    ]) {
+        assert.equal((await request('/api/users', 'POST', { name: 'Account', email: 'account@example.invalid', ...fields })).status, 400)
+    }
+    assert.equal(queryMock.mock.callCount(), 0)
 })
 
 test('task validation rejects invalid fields before any query', async () => {
@@ -126,7 +161,7 @@ test('status update handles every supported status and missing tasks', async () 
     for (const status of ['Open', 'In Progress', 'Completed']) {
         queryMock.mock.mockImplementation(async (sql, values) => {
             assert.match(sql, /updated_at = CURRENT_TIMESTAMP/)
-            assert.deepEqual(values, [status, 1])
+            assert.deepEqual(values, [status, 1, true, 900])
             return { rows: [{ id: 1, status }] }
         })
         assert.deepEqual(await request('/api/tasks/1/status', 'PATCH', { status }), {

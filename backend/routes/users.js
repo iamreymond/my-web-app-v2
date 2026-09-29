@@ -1,6 +1,7 @@
 const express = require('express')
 const pool = require('../config/database')
 const jsonBody = require('../middleware/jsonBody')
+const { validPassword, hashPassword } = require('../config/passwords')
 
 const router = express.Router()
 
@@ -11,6 +12,8 @@ router.get('/', async (req, res, next) => {
                 id,
                 name,
                 email,
+                role,
+                (password_hash IS NOT NULL) AS "canLogin",
                 created_at AS "createdAt"
             FROM users
             ORDER BY id
@@ -24,7 +27,7 @@ router.get('/', async (req, res, next) => {
 
 router.post('/', jsonBody, async (req, res, next) => {
     try {
-        const { name, email } = req.body
+        const { name, email, password, role = 'user' } = req.body
 
         // Validate types before trimming; match the database's field limits.
         if (typeof name !== 'string' || !name.trim() || [...name.trim()].length > 100) {
@@ -35,15 +38,24 @@ router.post('/', jsonBody, async (req, res, next) => {
             return res.status(400).json({ error: 'A valid email of up to 255 characters is required' })
         }
 
+        if (!validPassword(password)) {
+            return res.status(400).json({ error: 'Password must be at least 12 characters and at most 72 UTF-8 bytes' })
+        }
+        if (!['admin', 'user'].includes(role)) {
+            return res.status(400).json({ error: 'Role must be admin or user' })
+        }
+        const passwordHash = await hashPassword(password)
         const result = await pool.query(
             `
-                INSERT INTO users (name, email)
-                VALUES ($1, $2)
-                RETURNING id, name, email, created_at AS "createdAt"
+                INSERT INTO users (name, email, password_hash, role)
+                VALUES ($1, $2, $3, $4)
+                RETURNING id, name, email, role, true AS "canLogin", created_at AS "createdAt"
             `,
             [
                 name.trim(),
                 email.trim().toLowerCase(),
+                passwordHash,
+                role,
             ]
         )
 

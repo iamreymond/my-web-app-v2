@@ -33,6 +33,9 @@ PostgreSQL error `28P01` means the server rejected authentication. Compare the
 host/port/role against the verified local connection, check for overriding shell
 variables, and update the local secret. Do not disable authentication to fix it.
 
+For accounts, also follow [the additive account migration and bootstrap](accounts.md).
+The final schema includes role/password fields and PostgreSQL session storage.
+
 ## Initialize and verify
 
 Run these from `backend/` after installing the project's declared dependencies:

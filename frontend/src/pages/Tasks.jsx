@@ -6,6 +6,7 @@ import TaskForm from '../components/TaskForm.jsx'
 import StatusBadge from '../components/StatusBadge.jsx'
 
 function Tasks({
+    isAdmin = true,
     tasks,
     users,
     onCreateTask,
@@ -46,24 +47,24 @@ function Tasks({
             <div>
                 <div className="page-header">
                     <div>
-                        <h2>Tasks</h2>
+                        <h2>{isAdmin ? 'Tasks' : 'My Tasks'}</h2>
                         <p>
-                            Create and manage application work items.
+                            {isAdmin ? 'Create and manage application work items.' : 'View your assigned work and update its status.'}
                         </p>
                     </div>
                 </div>
 
-                <TaskForm
+                {isAdmin && <TaskForm
                     users={users}
                     onCreateTask={onCreateTask}
-                />
+                />}
 
                 {statusError && <p className="message message-error" role="alert">{statusError}</p>}
                 <p className="status-feedback" role="status">{savingTaskId !== null ? 'Saving status…' : statusMessage}</p>
                 <div className="task-list">
                     {tasks.length === 0 ? (
                         <div className="card empty-state">
-                            No tasks yet. Create your first task above.
+                            {isAdmin ? 'No tasks yet. Create your first task above.' : 'No tasks are assigned to you yet.'}
                         </div>
                     ) : (
                         tasks.map(task => (

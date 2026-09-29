@@ -5,6 +5,21 @@ The backend persists users and tasks in PostgreSQL. The React frontend calls the
 endpoints through its API service and Vite's local proxy. See [database setup](database.md)
 for connection configuration and the [README](../README.md) for local startup.
 
+## Authentication and access
+
+Use POST /api/auth/login with an email/password JSON object and preserve the returned
+HttpOnly cookie. GET /api/auth/me returns { "user": null } when signed out or a safe
+account when signed in. POST /api/auth/logout destroys the session. All writes,
+including login/logout, require the header X-Requested-With: WorkTracker.
+See [Accounts setup](accounts.md) for bootstrap, cookies, passwords, and migration.
+
+GET/POST users and POST tasks require Admin access. GET tasks returns all tasks for
+Admins and only assigned tasks for Users; query parameters cannot override this.
+PATCH task status permits Admins or the assigned User. Missing/unowned task IDs
+return 403 for Users, while a missing task returns 404 for Admins. Unauthenticated
+protected requests return 401; forbidden actions return 403. Login throttling
+returns 429. All account responses exclude password hashes.
+
 ## Endpoints
 
 | Method | Path | Success | Purpose |
@@ -23,7 +38,7 @@ always uses the database's `Open` default, regardless of a submitted status.
 ## Create a user
 
 ```json
-{ "name": "Alice Example", "email": "alice@example.com" }
+{ "name": "Alice Example", "email": "alice@example.com", "password": "<private initial password>", "role": "user" }
 ```
 
 Name must be a nonblank string of up to 100 characters after trimming. Email must
@@ -31,7 +46,11 @@ have a basic `name@domain.suffix` shape and be at most 255 characters. Email is
 trimmed and lowercased before saving. A database uniqueness conflict returns 409.
 This does not verify mailbox ownership or deliverability.
 
-User records have `id`, `name`, `email`, and `createdAt`. Both listing and creation
+Account creation also requires a password (at least 12 characters, at most 72 UTF-8
+bytes). Role is admin or user, defaulting to user. The angle-bracketed password above
+is a placeholder, not a suggested credential.
+
+User records have `id`, `name`, `email`, `role`, `canLogin`, and `createdAt`. Both listing and creation
 use camelCase JSON timestamps (previously the user routes returned `created_at`).
 
 ## Create a task
@@ -92,7 +111,8 @@ Do not put real passwords in documentation or source code.
 Run `npm test` (or `node --test`) from `backend/`. Tests use Node's built-in test
 runner, an ephemeral local HTTP port, and a mocked query method. They do not load
 `.env`, connect to PostgreSQL, or prove that the live schema matches the queries.
-No additional test dependencies are required.
+Sessions use an isolated in-memory test store; authentication and ownership bypass
+cases run alongside the original API tests.
 
 For manual Postman checks after database configuration is resolved, use the sample
 bodies above, verify successful creates appear in GET results, and verify status

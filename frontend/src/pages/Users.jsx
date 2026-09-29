@@ -38,7 +38,8 @@ function Users({ users, onCreateUser, isLoading = false, error = '' }) {
                                         </strong>
 
                                         <span>
-                                            {user.email}
+                                            {user.email} — {user.role}
+                                            {user.canLogin === false && ' (login not enabled)'}
                                         </span>
                                     </div>
                                 ))}

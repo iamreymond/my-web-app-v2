@@ -1,6 +1,7 @@
 const express = require('express')
 const pool = require('../config/database')
 const jsonBody = require('../middleware/jsonBody')
+const { requireAdmin } = require('../middleware/auth')
 
 const router = express.Router()
 
@@ -29,8 +30,9 @@ router.get('/', async (req, res, next) => {
                 created_at AS "createdAt",
                 updated_at AS "updatedAt"
             FROM tasks
+            WHERE ($1::boolean OR user_id = $2)
             ORDER BY id
-        `)
+        `, [req.account.role === 'admin', req.account.id])
 
         res.json(result.rows)
     } catch (error) {
@@ -38,7 +40,7 @@ router.get('/', async (req, res, next) => {
     }
 })
 
-router.post('/', jsonBody, async (req, res, next) => {
+router.post('/', requireAdmin, jsonBody, async (req, res, next) => {
     try {
         const {
             title,
@@ -138,7 +140,7 @@ router.patch('/:id/status', jsonBody, async (req, res, next) => {
                 SET
                     status = $1,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = $2
+                WHERE id = $2 AND ($3::boolean OR user_id = $4)
                 RETURNING
                     id,
                     title,
@@ -149,10 +151,12 @@ router.patch('/:id/status', jsonBody, async (req, res, next) => {
                     created_at AS "createdAt",
                     updated_at AS "updatedAt"
             `,
-            [status, Number(id)]
+            [status, Number(id), req.account.role === 'admin', req.account.id]
         )
 
         if (result.rows.length === 0) {
+            // Use 403 for regular users without revealing whether an unowned task exists.
+            if (req.account.role !== 'admin') return res.status(403).json({ error: 'You may only update your assigned tasks' })
             return res.status(404).json({
                 error: 'Task not found',
             })

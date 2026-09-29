@@ -4,6 +4,9 @@ CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
+    -- NULL is reserved for preserved legacy assignment records that cannot log in.
+    password_hash TEXT,
+    role VARCHAR(10) NOT NULL DEFAULT 'user' CONSTRAINT users_role_check CHECK (role IN ('admin', 'user')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     -- Matches the existing database; no user-edit endpoint updates this column yet.
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -27,3 +30,13 @@ CREATE TABLE IF NOT EXISTS tasks (
     CONSTRAINT tasks_priority_check
         CHECK (priority IN ('Low', 'Medium', 'High'))
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower_key ON users (lower(email));
+
+-- Opaque session IDs refer to server-side data; expiration supports automatic pruning.
+CREATE TABLE IF NOT EXISTS sessions (
+    sid VARCHAR NOT NULL PRIMARY KEY,
+    sess JSON NOT NULL,
+    expire TIMESTAMP(6) NOT NULL
+);
+CREATE INDEX IF NOT EXISTS sessions_expire_idx ON sessions (expire);

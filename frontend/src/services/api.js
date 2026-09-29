@@ -11,12 +11,17 @@ async function request(endpoint, options = {}) {
         const response = await fetch(`/api${endpoint}`, {
             ...options,
             signal,
-            headers: { Accept: 'application/json', ...options.headers },
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json', 'X-Requested-With': 'WorkTracker', ...options.headers },
         })
         // A proxy error can be HTML or empty, so never display raw server content.
         const isJson = response.headers.get('content-type')?.includes('application/json')
         const data = isJson ? await response.json() : null
         if (!response.ok) {
+            // A session that expired elsewhere returns the UI to login; passwords never enter browser storage.
+            if (response.status === 401 && endpoint !== '/auth/login' && typeof window !== 'undefined') {
+                window.dispatchEvent(new Event('session-expired'))
+            }
             if (response.status >= 500) {
                 throw new Error('The service is unavailable. Please try again shortly.')
             }
@@ -44,7 +49,8 @@ async function request(endpoint, options = {}) {
 
 function isUser(user) {
     return user && Number.isInteger(user.id) && user.id > 0 &&
-        typeof user.name === 'string' && typeof user.email === 'string'
+        typeof user.name === 'string' && typeof user.email === 'string' &&
+        ['admin', 'user'].includes(user.role)
 }
 
 function isTask(task) {
@@ -84,4 +90,19 @@ export async function createTask(task) {
 
 export async function updateTaskStatus(id, status) {
     return validate(await request(`/tasks/${id}/status`, jsonOptions('PATCH', { status })), isTask)
+}
+
+export async function getSession(signal) {
+    const data = await request('/auth/me', { signal })
+    if (data.user !== null) validate(data.user, isUser)
+    return data.user
+}
+
+export async function login(credentials) {
+    const data = await request('/auth/login', jsonOptions('POST', credentials))
+    return validate(data.user, isUser)
+}
+
+export async function logout() {
+    return request('/auth/logout', jsonOptions('POST', {}))
 }

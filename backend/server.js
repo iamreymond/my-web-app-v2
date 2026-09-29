@@ -5,6 +5,10 @@ const tasksRouter = require('./routes/tasks')
 const errorHandler = require('./middleware/errors')
 const validateDatabaseEnvironment = require('./config/environment')
 
+const createSessionMiddleware = require('./config/session')
+const authRouter = require('./routes/auth')
+const { loadAccount, requireAccount, requireAdmin, protectWrites } = require('./middleware/auth')
+
 const app = express()
 
 const PORT = process.env.PORT || 3000
@@ -12,9 +16,7 @@ const PORT = process.env.PORT || 3000
 // Limit request size before parsing user-supplied JSON.
 app.use(express.json({ limit: '100kb' }))
 
-app.use('/api/users', usersRouter)
-app.use('/api/tasks', tasksRouter)
-
+// Health remains independent of cookie/session lookup, including during database outages.
 app.get('/api/health', async (req, res) => {
     try {
         const result = await pool.query('SELECT NOW()')
@@ -34,6 +36,17 @@ app.get('/api/health', async (req, res) => {
         })
     }
 })
+
+// Session cookies identify accounts; these backend checks are the security boundary.
+app.use('/api', (req, res, next) => {
+    res.set('Cache-Control', 'no-store')
+    next()
+})
+app.use('/api', createSessionMiddleware(), protectWrites, loadAccount)
+app.use('/api/auth', authRouter)
+app.use('/api/users', requireAccount, requireAdmin, usersRouter)
+app.use('/api/tasks', requireAccount, tasksRouter)
+
 
 app.use((req, res) => {
     res.status(404).json({

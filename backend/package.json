@@ -7,14 +7,21 @@
     "start": "node --env-file=.env server.js",
     "test": "node --test",
     "db:check": "node --env-file=.env scripts/check-database.js",
-    "db:init": "node --env-file=.env scripts/init-database.js"
+    "db:init": "node --env-file=.env scripts/init-database.js",
+    "db:migrate:accounts": "node --env-file=.env scripts/migrate-accounts.js",
+    "admin:bootstrap": "node --env-file=.env scripts/bootstrap-admin.js",
+    "account:activate": "node --env-file=.env scripts/activate-legacy-user.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "connect-pg-simple": "^10.0.0",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.7.0",
+    "express-session": "^1.19.0",
     "pg": "^8.23.0"
   }
 }

@@ -49,11 +49,15 @@ data through Express; browser refreshes preserve saved users and tasks.
 Use Node.js 22.12+ (Node 24 recommended) and a running local PostgreSQL server.
 Follow the database setup guide above for `my_web_app_v2` and `backend/.env`.
 Do not overwrite an existing `.env` or recreate an existing database.
+Follow [Accounts setup](docs/accounts.md) to configure SESSION_SECRET and private
+bootstrap Admin settings before the commands below. Bootstrap is safe to repeat.
 
 In one terminal, from `backend/`:
 
 ```text
 npm ci
+npm run db:migrate:accounts
+npm run admin:bootstrap
 npm run db:check
 npm start
 ```
@@ -73,7 +77,8 @@ proxies them to Express, so local development needs no additional CORS middlewar
 If Express uses another port, copy `frontend/.env.example` to `frontend/.env`, set
 `API_PROXY_TARGET`, and restart Vite. Never put database credentials in frontend files.
 
-App loads users and tasks together, then shares those records with the three pages.
+App restores the cookie session before loading data. Admins manage all users/tasks;
+Users see only their assigned tasks and their Profile. Express enforces these permissions.
 Forms await successful API responses before clearing input or updating state. Initial
 load failures show a Retry button. Reload the page to refresh changes made elsewhere.
 
