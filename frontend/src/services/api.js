@@ -106,3 +106,11 @@ export async function login(credentials) {
 export async function logout() {
     return request('/auth/logout', jsonOptions('POST', {}))
 }
+
+export async function getUser(id) { return validate(await request(`/users/${id}`), isUser) }
+export async function updateUser(id, user) { return validate(await request(`/users/${id}`, jsonOptions('PUT', user)), isUser) }
+export async function updateUserStatus(id, active) { return validate(await request(`/users/${id}/status`, jsonOptions('PATCH', { active })), isUser) }
+export async function deleteUser(id) { return request(`/users/${id}`, { method: 'DELETE' }) }
+export async function getTask(id) { return validate(await request(`/tasks/${id}`), isTask) }
+export async function updateTask(id, task) { return validate(await request(`/tasks/${id}`, jsonOptions('PUT', task)), isTask) }
+export async function deleteTask(id) { return request(`/tasks/${id}`, { method: 'DELETE' }) }

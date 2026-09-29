@@ -1,10 +1,10 @@
 import { useState } from 'react'
 
-function UserForm({ onCreateUser }) {
-    const [name, setName] = useState('')
-    const [email, setEmail] = useState('')
+function UserForm({ onCreateUser, user, onCancel }) {
+    const [name, setName] = useState(user?.name || '')
+    const [email, setEmail] = useState(user?.email || '')
     const [password, setPassword] = useState('')
-    const [role, setRole] = useState('user')
+    const [role, setRole] = useState(user?.role || 'user')
 
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
@@ -22,13 +22,14 @@ function UserForm({ onCreateUser }) {
             setError('Enter a name containing more than spaces.')
             return
         }
-        if (password.length < 12 || new TextEncoder().encode(password).length > 72) {
+        if (!user && (password.length < 12 || new TextEncoder().encode(password).length > 72)) {
             setError('Password must be at least 12 characters and at most 72 UTF-8 bytes.')
             return
         }
         setIsSubmitting(true)
         try {
-            await onCreateUser({ name: name.trim(), email: email.trim().toLowerCase(), password, role })
+            await onCreateUser({ name: name.trim(), email: email.trim().toLowerCase(), ...(user ? {} : { password }), role })
+            if (user) return
             setName('')
             setEmail('')
             setPassword('')
@@ -43,8 +44,8 @@ function UserForm({ onCreateUser }) {
 
     return (
         <form className="form" onSubmit={handleSubmit}>
-            <h3>Add User</h3>
-            <p className="form-hint">All fields are required. Share the initial password privately with the account owner.</p>
+            <h3>{user ? 'Edit User' : 'Add User'}</h3>
+            <p className="form-hint">{user ? 'Update account information. Passwords are managed separately.' : 'All fields are required. Share the initial password privately with the account owner.'}</p>
             {error && <p className="message message-error" role="alert">{error}</p>}
             {success && <p className="message message-success" role="status">{success}</p>}
             <fieldset disabled={isSubmitting}>
@@ -75,12 +76,12 @@ function UserForm({ onCreateUser }) {
                     />
                 </div>
 
-                <div className="form-group">
+                {!user && <div className="form-group">
                     <label htmlFor="user-password">Initial password</label>
                     <input id="user-password" type="password" autoComplete="new-password"
                         value={password} onChange={event => setPassword(event.target.value)} minLength={12} required />
                     <span className="form-hint">At least 12 characters; maximum 72 UTF-8 bytes.</span>
-                </div>
+                </div>}
                 <div className="form-group">
                     <label htmlFor="user-role">Role</label>
                     <select id="user-role" value={role} onChange={event => setRole(event.target.value)}>
@@ -89,8 +90,9 @@ function UserForm({ onCreateUser }) {
                     </select>
                 </div>
                 <button type="submit">
-                    {isSubmitting ? 'Adding user…' : 'Add User'}
+                    {isSubmitting ? 'Saving…' : user ? 'Save User' : 'Add User'}
                 </button>
+            {onCancel && <button type="button" className="secondary" onClick={onCancel}>Cancel</button>}
             </fieldset>
         </form>
     )

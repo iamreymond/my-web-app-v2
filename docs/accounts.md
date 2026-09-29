@@ -15,11 +15,15 @@ Existing users become role `user` with a null password hash and cannot log in.
 The Admin list labels these accounts "login not enabled". To activate one
 deliberately, set `LEGACY_ACCOUNT_EMAIL` and `LEGACY_ACCOUNT_PASSWORD` in the ignored
 local `.env`, run `npm run account:activate`, then remove those temporary settings.
-The script only changes an inactive User; it cannot overwrite an active password
-or grant an Admin role. Assigned tasks remain attached to the same user ID.
+The script only enables a legacy User without a password; it cannot overwrite an existing password
+or grant an Admin role. Assigned tasks remain attached to the same user ID. This does not change the separate
+active/inactive status; an inactive account must also be reactivated by an Admin.
 
 For an empty future database, `npm run db:init` creates the final schema directly.
 Do not use schema initialization as a substitute for upgrading existing tables.
+
+Run `npm run db:migrate:management` afterward for account status. See
+[Admin management](admin-management.md) for the new account safeguards and session revocation.
 
 ## First Admin
 

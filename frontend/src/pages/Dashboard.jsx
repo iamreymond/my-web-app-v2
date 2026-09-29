@@ -46,6 +46,19 @@ function Dashboard({ users, tasks, isAdmin = true, isLoading = false, error = ''
                         <strong>{completedTasks}</strong>
                     </div>
                 </div>
+                {isAdmin && <>
+                    <div className="stats-grid workload">
+                        <div className="card"><h3>Active Users</h3><strong>{users.filter(user => user.active).length}</strong></div>
+                        <div className="card"><h3>Inactive Users</h3><strong>{users.filter(user => !user.active).length}</strong></div>
+                        <div className="card"><h3>Unassigned Tasks</h3><strong>{tasks.filter(task => task.userId === null).length}</strong></div>
+                    </div>
+                    <section className="card workload"><h3>Workload by Priority</h3>
+                        <p>All tasks, including completed work.</p>
+                        <div className="stats-grid">{['High', 'Medium', 'Low'].map(priority => <div key={priority}>
+                            <span>{priority}</span><p><strong>{tasks.filter(task => task.priority === priority).length}</strong></p>
+                        </div>)}</div>
+                    </section>
+                </>}
             </div>
         </DataState>
     )

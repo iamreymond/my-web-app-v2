@@ -19,7 +19,7 @@ async function bootstrap() {
         await client.query('BEGIN')
         // Serialize bootstrap attempts so two processes cannot both create the first admin.
         await client.query('LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE')
-        const admins = await client.query("SELECT id FROM users WHERE role = 'admin' AND password_hash IS NOT NULL")
+        const admins = await client.query("SELECT id FROM users WHERE role = 'admin' AND password_hash IS NOT NULL AND active = true")
         if (admins.rowCount) {
             await client.query('ROLLBACK')
             console.log('An active Admin already exists; no account was changed.')

@@ -6,9 +6,11 @@ async function loadAccount(req, res, next) {
             // Re-read the role each time; a client cannot choose its role or retain revoked access.
             const result = await pool.query(`
                 SELECT id, name, email, role, created_at AS "createdAt"
-                FROM users WHERE id = $1 AND password_hash IS NOT NULL
+                FROM users WHERE id = $1 AND password_hash IS NOT NULL AND active = true
             `, [req.session.userId])
             req.account = result.rows[0]
+            // Revoked accounts must sign in again after reactivation; old sessions stay invalid.
+            if (!req.account) await new Promise((resolve, reject) => req.session.regenerate(error => error ? reject(error) : resolve()))
         }
         next()
     } catch (error) { next(error) }

@@ -12,7 +12,7 @@ async function activate() {
         const result = await pool.query(`UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP
             WHERE lower(email) = $2 AND password_hash IS NULL AND role = 'user' RETURNING id`,
         [await hashPassword(password), email])
-        console.log(result.rowCount ? 'Legacy User login enabled; assignments preserved.' : 'No inactive User matched; nothing changed.')
+        console.log(result.rowCount ? 'Legacy User login enabled; assignments preserved.' : 'No legacy User without a password matched; nothing changed.')
     } catch (error) {
         console.error('Legacy activation failed:', error.code || error.message)
         process.exitCode = 1

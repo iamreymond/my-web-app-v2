@@ -24,12 +24,12 @@ router.post('/login', loginLimiter, jsonBody, async (req, res, next) => {
             return res.status(401).json({ error: 'Email or password is incorrect' })
         }
         const result = await pool.query(`
-            SELECT id, name, email, role, password_hash, created_at AS "createdAt"
+            SELECT id, name, email, role, active, password_hash, created_at AS "createdAt"
             FROM users WHERE lower(email) = $1
         `, [email.trim().toLowerCase()])
         const account = result.rows[0]
         const matches = await bcrypt.compare(password, account?.password_hash || dummyHash)
-        if (!matches || !account?.password_hash) {
+        if (!matches || !account?.password_hash || account.active === false) {
             return res.status(401).json({ error: 'Email or password is incorrect' })
         }
         // Replace any previous session ID after login to prevent session fixation.

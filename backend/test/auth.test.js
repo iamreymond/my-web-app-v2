@@ -32,7 +32,7 @@ beforeEach(async context => {
     context.mock.method(pool, 'query', async (sql, values) => {
         if (sql.includes('WHERE lower(email) = $1')) return { rows: accounts.filter(user => user.email === values[0]) }
         if (sql.includes('WHERE id = $1 AND password_hash IS NOT NULL')) {
-            return { rows: accounts.filter(user => user.id === values[0] && user.password_hash).map(({ password_hash, ...safe }) => safe) }
+            return { rows: accounts.filter(user => user.id === values[0] && user.password_hash && user.active !== false).map(({ password_hash, ...safe }) => safe) }
         }
         if (sql.includes('FROM tasks')) {
             assert.match(sql, /WHERE \(\$1::boolean OR user_id = \$2\)/)
@@ -147,6 +147,23 @@ test('login replaces session IDs and roles are re-read from the database', async
 
 test('invalid cookie cannot forge authentication', async () => {
     assert.equal((await request('/api/users', { cookie: 'worktracker.sid=admin' })).status, 401)
+})
+
+test('inactive accounts cannot log in or retain authenticated access', async () => {
+    const cookie = await signIn()
+    accounts[1].active = false
+    assert.equal((await request('/api/tasks', { cookie })).status, 401)
+    const denied = await request('/api/auth/login', { method: 'POST', body: { email: 'user@example.invalid', password } })
+    assert.equal(denied.status, 401)
+    accounts[1].active = true
+    assert.equal((await request('/api/tasks', { cookie })).status, 401)
+})
+
+test('reassignment immediately changes ownership on subsequent reads and updates', async () => {
+    const cookie = await signIn()
+    tasks[0].userId = 3
+    assert.deepEqual((await request('/api/tasks', { cookie })).data, [])
+    assert.equal((await request('/api/tasks/10/status', { cookie, method: 'PATCH', body: { status: 'Completed' } })).status, 403)
 })
 
 test('login rate limit returns safe JSON', async () => {

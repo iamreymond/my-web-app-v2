@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { taskPriorities } from '../data/taskOptions.js'
+import { taskPriorities, taskStatuses } from '../data/taskOptions.js'
 
-function TaskForm({ users, onCreateTask }) {
-    const [title, setTitle] = useState('')
-    const [description, setDescription] = useState('')
-    const [priority, setPriority] = useState('Medium')
-    const [userId, setUserId] = useState('')
+function TaskForm({ users, onCreateTask, task, onCancel }) {
+    const [title, setTitle] = useState(task?.title || '')
+    const [description, setDescription] = useState(task?.description || '')
+    const [priority, setPriority] = useState(task?.priority || 'Medium')
+    const [userId, setUserId] = useState(task?.userId ? String(task.userId) : '')
+    const [status, setStatus] = useState(task?.status || 'Open')
 
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
@@ -37,9 +38,12 @@ function TaskForm({ users, onCreateTask }) {
                 title: title.trim(),
                 description: description.trim(),
                 priority,
+                status,
                 userId: assignedUser ? assignedUser.id : null,
             })
 
+            if (task) return
+            setStatus('Open')
             setTitle('')
             setDescription('')
             setPriority('Medium')
@@ -54,8 +58,8 @@ function TaskForm({ users, onCreateTask }) {
 
     return (
         <form className="form" onSubmit={handleSubmit}>
-            <h3>Create Task</h3>
-            <p className="form-hint">Title is required. New tasks start as Open.</p>
+            <h3>{task ? 'Edit Task' : 'Create Task'}</h3>
+            <p className="form-hint">Title is required. Choose status, priority, and an optional assignment.</p>
             {error && <p className="message message-error" role="alert">{error}</p>}
             {success && <p className="message message-success" role="status">{success}</p>}
             <fieldset disabled={isSubmitting}>
@@ -79,6 +83,7 @@ function TaskForm({ users, onCreateTask }) {
 
                     <textarea
                         id="task-description"
+                        maxLength={10000}
                         value={description}
                         onChange={event =>
                             setDescription(event.target.value)
@@ -102,6 +107,10 @@ function TaskForm({ users, onCreateTask }) {
                     </select>
                 </div>
 
+                <div className="form-group"><label htmlFor="task-status">Task status</label>
+                    <select id="task-status" value={status} onChange={event => setStatus(event.target.value)}>
+                        {taskStatuses.map(value => <option key={value}>{value}</option>)}
+                    </select></div>
                 <div className="form-group">
                     <label htmlFor="task-user">
                         Assigned User
@@ -119,12 +128,12 @@ function TaskForm({ users, onCreateTask }) {
                             Unassigned
                         </option>
 
-                        {users.map(user => (
+                        {users.filter(user => user.active !== false || user.id === task?.userId).map(user => (
                             <option
                                 key={user.id}
                                 value={user.id}
                             >
-                                {user.name}
+                                {user.name}{user.active === false ? ' (inactive; existing assignment)' : ''}
                             </option>
                         ))}
                     </select>
@@ -132,8 +141,9 @@ function TaskForm({ users, onCreateTask }) {
 
                 <p id="assignment-hint" className="form-hint">{users.length === 0 ? 'Add a user on the Users page to assign tasks.' : 'Assignment is optional.'}</p>
                 <button type="submit">
-                    {isSubmitting ? 'Creating task…' : 'Create Task'}
+                    {isSubmitting ? 'Saving…' : task ? 'Save Task' : 'Create Task'}
                 </button>
+            {onCancel && <button type="button" className="secondary" onClick={onCancel}>Cancel</button>}
             </fieldset>
         </form>
     )

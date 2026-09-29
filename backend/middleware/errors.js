@@ -1,6 +1,9 @@
 // Express forwards parser and route failures here so clients always receive JSON.
 function errorHandler(error, req, res, next) {
     if (res.headersSent) return next(error)
+    if (error.publicStatus) return res.status(error.publicStatus).json({ error: error.message })
+    if (error.code === '23505') return res.status(409).json({ error: 'Email already exists' })
+    if (error.code === '55P03') return res.status(409).json({ error: 'Another management operation is in progress. Please try again.' })
     if (error.type === 'entity.parse.failed') {
         return res.status(400).json({ error: 'Request body must be valid JSON' })
     }

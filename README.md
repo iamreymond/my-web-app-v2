@@ -57,6 +57,7 @@ In one terminal, from `backend/`:
 ```text
 npm ci
 npm run db:migrate:accounts
+npm run db:migrate:management
 npm run admin:bootstrap
 npm run db:check
 npm start
@@ -92,6 +93,9 @@ The project is developed progressively using:
 Architecture → Implementation → Testing → Verification → Review
 
 Major application technologies are introduced only when their role in the architecture becomes relevant.
+
+See [Admin management](docs/admin-management.md) for CRUD, account status, safe deletion,
+assignment rules, filtering, and manual verification.
 
 ## Previous Project
 

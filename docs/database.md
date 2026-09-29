@@ -73,7 +73,7 @@ The HTTP server remains able to return safe failures when the database is down.
 
 The schema uses primary keys, unique emails, task status/priority checks, and an
 optional foreign key to users. If a user is deleted externally, `ON DELETE SET
-NULL` retains their tasks as unassigned. User deletion is not an API feature.
+NULL` retains their tasks as unassigned. The Admin deletion API blocks deletion while any tasks remain assigned.
 
 Timestamps default at insertion. Task status updates explicitly refresh
 `updated_at`; arbitrary external SQL updates do not do so automatically. The
@@ -81,8 +81,9 @@ current schema uses timestamps without time zone; keep local application/databas
 timezone settings consistent. Changing timestamp types is a separate data decision.
 
 The existing users table also includes `updated_at`, which the schema preserves.
-There is no user-edit endpoint or timestamp trigger; this column currently defaults
-at insertion and is not exposed by the user API.
+Admin edits and status changes update and expose this timestamp. There is no automatic
+timestamp trigger for external SQL. Run `npm run db:migrate:management` after the
+accounts migration to add account status safely; see [Admin management](admin-management.md).
 
 ## Tests
 

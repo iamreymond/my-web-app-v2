@@ -13,7 +13,7 @@ account when signed in. POST /api/auth/logout destroys the session. All writes,
 including login/logout, require the header X-Requested-With: WorkTracker.
 See [Accounts setup](accounts.md) for bootstrap, cookies, passwords, and migration.
 
-GET/POST users and POST tasks require Admin access. GET tasks returns all tasks for
+All users endpoints and task creation/full editing/deletion require Admin access. GET tasks returns all tasks for
 Admins and only assigned tasks for Users; query parameters cannot override this.
 PATCH task status permits Admins or the assigned User. Missing/unowned task IDs
 return 403 for Users, while a missing task returns 404 for Admins. Unauthenticated
@@ -26,14 +26,22 @@ returns 429. All account responses exclude password hashes.
 | --- | --- | --- | --- |
 | GET | `/api/health` | 200 | Check database connectivity |
 | GET | `/api/users` | 200 | Return users ordered by ID |
-| POST | `/api/users` | 201 | Create a user |
+| POST | `/api/users` | 201 | Create an active user |
+| GET | `/api/users/:id` | 200 | User details and task summary (Admin) |
+| PUT | `/api/users/:id` | 200 | Edit name, email, role (Admin) |
+| PATCH | `/api/users/:id/status` | 200 | Set active boolean (Admin) |
+| DELETE | `/api/users/:id` | 200 | Safe user deletion (Admin) |
 | GET | `/api/tasks` | 200 | Return tasks ordered by ID |
 | POST | `/api/tasks` | 201 | Create an optionally assigned task |
+| GET | `/api/tasks/:id` | 200 | Task details (Admin or owner; otherwise 404) |
+| PUT | `/api/tasks/:id` | 200 | Replace editable task fields (Admin) |
+| DELETE | `/api/tasks/:id` | 200 | Delete task (Admin) |
 | PATCH | `/api/tasks/:id/status` | 200 | Change task status |
 
-POST and PATCH require `Content-Type: application/json` and a JSON object.
-The maximum request body size is 100 KB. Unknown fields are ignored; task creation
-always uses the database's `Open` default, regardless of a submitted status.
+POST, PUT, and PATCH require `Content-Type: application/json` and a JSON object.
+The maximum request body size is 100 KB. Unknown fields are ignored except password,
+password_hash, and active fields in user edits, which are rejected. Task creation
+accepts a valid status and defaults to Open.
 
 ## Create a user
 
@@ -50,7 +58,7 @@ Account creation also requires a password (at least 12 characters, at most 72 UT
 bytes). Role is admin or user, defaulting to user. The angle-bracketed password above
 is a placeholder, not a suggested credential.
 
-User records have `id`, `name`, `email`, `role`, `canLogin`, and `createdAt`. Both listing and creation
+User records have `id`, `name`, `email`, `role`, `active`, `canLogin`, `createdAt`, and `updatedAt`. Both listing and creation
 use camelCase JSON timestamps (previously the user routes returned `created_at`).
 
 ## Create a task
@@ -65,7 +73,7 @@ use camelCase JSON timestamps (previously the user routes returned `created_at`)
 ```
 
 Title must be a nonblank string of up to 200 characters after trimming.
-Description is an optional string, defaulting to empty; explicit null is rejected.
+Description is an optional string of at most 10000 characters, defaulting to empty; explicit null is rejected.
 Priority is `Low`, `Medium`, or `High`, defaulting to `Medium`.
 `userId` is an existing user's integer ID, or null/omitted for an unassigned task.
 String IDs are rejected. IDs must be between 1 and 2147483647.
@@ -93,8 +101,8 @@ Errors use `{ "error": "Human-readable message" }`. Health failures also include
 | Status | Meaning |
 | --- | --- |
 | 400 | Invalid JSON, body, field, ID, or nonexistent assigned user |
-| 404 | Unknown route or task not found |
-| 409 | Duplicate email |
+| 404 | Unknown route or record not found |
+| 409 | Duplicate email, blocked deletion/Admin change, or concurrent management lock timeout |
 | 413 | Request body too large |
 | 415 | Unsupported content type, charset, or encoding |
 | 500 | Unexpected server/database error |
@@ -118,3 +126,20 @@ For manual Postman checks after database configuration is resolved, use the samp
 bodies above, verify successful creates appear in GET results, and verify status
 updates persist. Repeat with invalid fields, duplicate emails, and missing IDs.
 Creation and update requests write to the configured database; use deliberate test data.
+
+## Admin edits and deletion
+
+PUT `/api/users/:id` requires `{ "name": "Alice Example", "email": "alice@example.com", "role": "user" }`.
+PATCH `/api/users/:id/status` requires `{ "active": false }` or `{ "active": true }`.
+GET user details adds `taskSummary: { total, open, inProgress, completed }`.
+Passwords are never editable through PUT. Status changes and edits update `updatedAt`.
+
+PUT `/api/tasks/:id` uses the same editable fields as creation, including `status`.
+It is a replacement of editable fields: omitted description/priority/status/userId
+use the creation defaults, so callers should send the complete form. Assignment
+must exist and be active, except that an existing inactive assignment may be retained.
+Both DELETE routes return a 200 JSON `{ "message": "... deleted" }` response.
+
+User deletion with assigned tasks and self deletion/deactivation/demotion return 409.
+The last usable Admin is protected. Deactivation and role changes revoke sessions.
+Full rules and manual checks are in [Admin management](admin-management.md).

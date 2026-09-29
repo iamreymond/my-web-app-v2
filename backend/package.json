@@ -10,7 +10,8 @@
     "db:init": "node --env-file=.env scripts/init-database.js",
     "db:migrate:accounts": "node --env-file=.env scripts/migrate-accounts.js",
     "admin:bootstrap": "node --env-file=.env scripts/bootstrap-admin.js",
-    "account:activate": "node --env-file=.env scripts/activate-legacy-user.js"
+    "account:activate": "node --env-file=.env scripts/activate-legacy-user.js",
+    "db:migrate:management": "node --env-file=.env scripts/migrate-management.js"
   },
   "keywords": [],
   "author": "",

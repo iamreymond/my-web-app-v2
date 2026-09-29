@@ -6,9 +6,10 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255) UNIQUE NOT NULL,
     -- NULL is reserved for preserved legacy assignment records that cannot log in.
     password_hash TEXT,
+    active BOOLEAN NOT NULL DEFAULT true,
     role VARCHAR(10) NOT NULL DEFAULT 'user' CONSTRAINT users_role_check CHECK (role IN ('admin', 'user')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    -- Matches the existing database; no user-edit endpoint updates this column yet.
+    -- Management edits explicitly refresh this timestamp.
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

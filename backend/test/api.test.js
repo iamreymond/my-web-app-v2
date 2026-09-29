@@ -38,6 +38,13 @@ beforeEach(context => {
         }
         return queryMock(sql, values)
     })
+    context.mock.method(pool, 'connect', async () => ({
+        query: async (sql, values) => {
+            if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(sql) || sql.startsWith('SET LOCAL') || sql.startsWith('LOCK TABLE')) return { rows: [] }
+            if (sql.includes("active = true AND role = 'admin'")) return { rows: [{ id: 900 }] }
+            return queryMock(sql, values)
+        }, release() {},
+    }))
     context.mock.method(console, 'error', () => {})
 })
 
@@ -117,8 +124,8 @@ test('task validation rejects invalid fields before any query', async () => {
 test('task creation applies defaults and uses SQL parameters', async () => {
     const task = { id: 1, title: "Task ' title", description: '', priority: 'Medium', status: 'Open', userId: null }
     queryMock.mock.mockImplementation(async (sql, values) => {
-        assert.match(sql, /VALUES \(\$1, \$2, \$3, \$4\)/)
-        assert.deepEqual(values, ["Task ' title", '', 'Medium', null])
+        assert.match(sql, /VALUES \(\$1, \$2, \$3, \$4, \$5\)/)
+        assert.deepEqual(values, ["Task ' title", '', 'Medium', null, 'Open'])
         return { rows: [task] }
     })
     assert.deepEqual(await request('/api/tasks', 'POST', { title: " Task ' title " }), { status: 201, body: task })
@@ -126,11 +133,11 @@ test('task creation applies defaults and uses SQL parameters', async () => {
 
 test('assigned task checks the user and preserves their numeric ID', async () => {
     queryMock.mock.mockImplementation(async (sql, values) => {
-        if (sql.startsWith('SELECT id FROM users')) {
+        if (sql.startsWith('SELECT id, active FROM users')) {
             assert.deepEqual(values, [2])
             return { rows: [{ id: 2 }] }
         }
-        assert.deepEqual(values, ['Task', 'Details', 'High', 2])
+        assert.deepEqual(values, ['Task', 'Details', 'High', 2, 'Open'])
         return { rows: [{ id: 1, userId: 2 }] }
     })
     assert.equal((await request('/api/tasks', 'POST', {

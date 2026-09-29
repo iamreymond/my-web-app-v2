@@ -4,6 +4,7 @@ import DataState from './components/DataState.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Users from './pages/Users.jsx'
 import Tasks from './pages/Tasks.jsx'
+import AdminTasks from './pages/AdminTasks.jsx'
 import Login from './pages/Login.jsx'
 import Profile from './pages/Profile.jsx'
 
@@ -115,17 +116,47 @@ function App() {
     }
 
     const isAdmin = account?.role === 'admin'
+    async function updateUser(id, fields) {
+        const owner = account.id
+        const saved = await api.updateUser(id, fields)
+        if (accountId.current !== owner) return
+        setUsers(current => current.map(user => user.id === id ? saved : user))
+        if (id === owner) setAccount(saved)
+    }
+    async function statusUser(id, active) {
+        const owner = account.id
+        const saved = await api.updateUserStatus(id, active)
+        if (accountId.current === owner) setUsers(current => current.map(user => user.id === id ? saved : user))
+    }
+    async function deleteUser(id) {
+        const owner = account.id
+        await api.deleteUser(id)
+        if (accountId.current === owner) setUsers(current => current.filter(user => user.id !== id))
+    }
+    async function updateTask(id, fields) {
+        const owner = account.id
+        const saved = await api.updateTask(id, fields)
+        if (accountId.current === owner) setTasks(current => current.map(task => task.id === id ? saved : task))
+    }
+    async function deleteTask(id) {
+        const owner = account.id
+        await api.deleteTask(id)
+        if (accountId.current === owner) setTasks(current => current.filter(task => task.id !== id))
+    }
     // Role-based rendering improves UX; Express authorization is the actual security boundary.
     function renderPage() {
-        if (currentPage === 'users' && isAdmin) return <Users users={users} onCreateUser={createUser} />
+        if (currentPage === 'users' && isAdmin) return <Users users={users} account={account} onCreateUser={createUser}
+            onUpdateUser={updateUser} onStatusUser={statusUser} onDeleteUser={deleteUser} />
         if (currentPage === 'profile') return <Profile account={account} />
+        if (currentPage === 'tasks' && isAdmin) return <AdminTasks tasks={tasks} users={users}
+            onCreateTask={createTask} onUpdateTask={updateTask} onDeleteTask={deleteTask} />
         if (currentPage === 'tasks') return <Tasks isAdmin={isAdmin} tasks={tasks} users={users}
             onCreateTask={createTask} onChangeTaskStatus={changeTaskStatus} />
         return <Dashboard isAdmin={isAdmin} users={users} tasks={tasks} />
     }
 
     const pages = isAdmin
-        ? [['dashboard', 'Dashboard'], ['users', 'Users'], ['tasks', 'Tasks']]
+        ? [['dashboard', 'Dashboard'], ['users', 'User Management'], ['tasks', 'Task Management']]
         : [['dashboard', 'Dashboard'], ['tasks', 'My Tasks'], ['profile', 'Profile']]
 
     return (
