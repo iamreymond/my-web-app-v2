@@ -5,7 +5,7 @@ async function loadAccount(req, res, next) {
         if (req.session.userId) {
             // Re-read the role each time; a client cannot choose its role or retain revoked access.
             const result = await pool.query(`
-                SELECT id, name, email, role, created_at AS "createdAt"
+                SELECT id, name, email, role, active, created_at AS "createdAt", updated_at AS "updatedAt"
                 FROM users WHERE id = $1 AND password_hash IS NOT NULL AND active = true
             `, [req.session.userId])
             req.account = result.rows[0]

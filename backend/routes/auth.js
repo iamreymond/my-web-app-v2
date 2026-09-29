@@ -24,7 +24,7 @@ router.post('/login', loginLimiter, jsonBody, async (req, res, next) => {
             return res.status(401).json({ error: 'Email or password is incorrect' })
         }
         const result = await pool.query(`
-            SELECT id, name, email, role, active, password_hash, created_at AS "createdAt"
+            SELECT id, name, email, role, active, password_hash, created_at AS "createdAt", updated_at AS "updatedAt"
             FROM users WHERE lower(email) = $1
         `, [email.trim().toLowerCase()])
         const account = result.rows[0]
@@ -36,8 +36,16 @@ router.post('/login', loginLimiter, jsonBody, async (req, res, next) => {
         await new Promise((resolve, reject) => req.session.regenerate(error => error ? reject(error) : resolve()))
         req.session.userId = account.id
         await new Promise((resolve, reject) => req.session.save(error => error ? reject(error) : resolve()))
-        const { id, name, role, createdAt } = account
-        res.json({ user: { id, name, email: account.email, role, createdAt } })
+        // If a password change raced with login, its session deletion may have happened before this save.
+        // Recheck afterward: either this detects the change, or a later change deletes the saved session.
+        // FOR SHARE waits for an in-flight password transaction instead of reading its old committed hash.
+        const latest = await pool.query('SELECT password_hash, active FROM users WHERE lower(email) = $1 FOR SHARE', [account.email.toLowerCase()])
+        if (latest.rows[0]?.password_hash !== account.password_hash || latest.rows[0]?.active === false) {
+            await new Promise((resolve, reject) => req.session.destroy(error => error ? reject(error) : resolve()))
+            return res.status(401).json({ error: 'Email or password is incorrect' })
+        }
+        const { id, name, role, active, createdAt, updatedAt } = account
+        res.json({ user: { id, name, email: account.email, role, active, createdAt, updatedAt } })
     } catch (error) { next(error) }
 })
 

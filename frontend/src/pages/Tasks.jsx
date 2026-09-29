@@ -1,127 +1,67 @@
-import DataState from '../components/DataState.jsx'
 import { useState } from 'react'
 import PriorityBadge from '../components/PriorityBadge.jsx'
-import { taskStatuses } from '../data/taskOptions.js'
-import TaskForm from '../components/TaskForm.jsx'
 import StatusBadge from '../components/StatusBadge.jsx'
+import { taskPriorities, taskStatuses } from '../data/taskOptions.js'
+import { formatDate } from '../services/management.js'
+import { filterMyTasks } from '../services/personal.js'
+import { getTask } from '../services/api.js'
 
-function Tasks({
-    isAdmin = true,
-    tasks,
-    users,
-    onCreateTask,
-    onChangeTaskStatus,
-    isLoading = false,
-    error = '',
-}) {
-    const [savingTaskId, setSavingTaskId] = useState(null)
-    const [statusError, setStatusError] = useState('')
-    const [statusMessage, setStatusMessage] = useState('')
+function Tasks({ tasks, onChangeTaskStatus }) {
+    const [filters, setFilters] = useState({ search: '', status: '', priority: '', sort: 'newest' })
+    const [busy, setBusy] = useState(null)
+    const [detail, setDetail] = useState(null)
+    const [error, setError] = useState('')
+    const [message, setMessage] = useState('')
+    const visible = filterMyTasks(tasks, filters)
+    const filter = (key, value) => setFilters(current => ({ ...current, [key]: value }))
 
-    // Keep the displayed status unchanged if the API request fails.
-    async function handleStatusChange(taskId, status) {
-        if (savingTaskId !== null) return
-        setSavingTaskId(taskId)
-        setStatusError('')
-        setStatusMessage('')
+    async function changeStatus(id, status) {
+        if (busy !== null) return
+        setBusy(id); setError(''); setMessage('')
         try {
-            await onChangeTaskStatus(taskId, status)
-            setStatusMessage('Task status updated.')
-        } catch (error) {
-            setStatusError(error.message || 'Unable to update status. Please try again.')
-        } finally {
-            setSavingTaskId(null)
-        }
+            // Shared state changes only after the ownership-checked API confirms the saved record.
+            const saved = await onChangeTaskStatus(id, status)
+            if (detail?.id === id) setDetail(saved)
+            setMessage('Task status updated. If it no longer matches your filters, it is hidden from this list.')
+        } catch (error) { setError(error.message) }
+        finally { setBusy(null) }
     }
-
-    function getUserName(userId) {
-        const user = users.find(
-            item => item.id === userId
-        )
-
-        return user ? user.name : 'Unassigned'
+    async function view(id) {
+        if (busy !== null) return
+        setBusy(id); setError(''); setDetail(null)
+        try { setDetail(await getTask(id)) }
+        catch (error) { setError(error.message) }
+        finally { setBusy(null) }
     }
-
-    return (
-        <DataState isLoading={isLoading} error={error}>
-            <div>
-                <div className="page-header">
-                    <div>
-                        <h2>{isAdmin ? 'Tasks' : 'My Tasks'}</h2>
-                        <p>
-                            {isAdmin ? 'Create and manage application work items.' : 'View your assigned work and update its status.'}
-                        </p>
-                    </div>
-                </div>
-
-                {isAdmin && <TaskForm
-                    users={users}
-                    onCreateTask={onCreateTask}
-                />}
-
-                {statusError && <p className="message message-error" role="alert">{statusError}</p>}
-                <p className="status-feedback" role="status">{savingTaskId !== null ? 'Saving status…' : statusMessage}</p>
-                <div className="task-list">
-                    {tasks.length === 0 ? (
-                        <div className="card empty-state">
-                            {isAdmin ? 'No tasks yet. Create your first task above.' : 'No tasks are assigned to you yet.'}
-                        </div>
-                    ) : (
-                        tasks.map(task => (
-                            <article
-                                className="card task-card"
-                                key={task.id}
-                            >
-                                <div className="task-header">
-                                    <div>
-                                        <h3>{task.title}</h3>
-
-                                        <p>
-                                            {task.description ||
-                                                'No description'}
-                                        </p>
-                                    </div>
-
-                                    <StatusBadge
-                                        status={task.status}
-                                    />
-                                </div>
-
-                                <div className="task-meta">
-                                    <PriorityBadge priority={task.priority} />
-
-                                    <span>
-                                        Assigned: {
-                                            getUserName(task.userId)
-                                        }
-                                    </span>
-                                </div>
-
-                                <div className="task-actions">
-                                    <label>
-                                        Status
-                                        <select
-                                            value={task.status}
-                                            disabled={savingTaskId !== null}
-                                            aria-label={`Status for ${task.title}`}
-                                            onChange={event =>
-                                                handleStatusChange(
-                                                    task.id,
-                                                    event.target.value
-                                                )
-                                            }
-                                        >
-                                            {taskStatuses.map(value => <option key={value}>{value}</option>)}
-                                        </select>
-                                    </label>
-                                </div>
-                            </article>
-                        ))
-                    )}
-                </div>
+    return <div className="personal management">
+        <div className="page-header"><h2>My Tasks</h2><p>Only work assigned to you. You can update status; other task changes are managed by an Admin.</p></div>
+        {error && <p role="alert" className="message message-error">{error}</p>}
+        <p role="status">{busy !== null ? 'Working…' : message}</p>
+        {detail && <section className="card detail-panel" aria-label="Task details">
+            <h3>{detail.title}</h3><p className="description">{detail.description || 'No description'}</p>
+            <div className="task-meta"><StatusBadge status={detail.status} /><PriorityBadge priority={detail.priority} /></div>
+            <p>Created: {formatDate(detail.createdAt)}<br />Updated: {formatDate(detail.updatedAt)}</p>
+            <button onClick={() => setDetail(null)}>Close Details</button>
+        </section>}
+        <div className="filters">
+            <label>Search my tasks<input value={filters.search} onChange={e => filter('search', e.target.value)} placeholder="Title or description" /></label>
+            <label>Filter status<select value={filters.status} onChange={e => filter('status', e.target.value)}><option value="">All statuses</option>{taskStatuses.map(value => <option key={value}>{value}</option>)}</select></label>
+            <label>Filter priority<select value={filters.priority} onChange={e => filter('priority', e.target.value)}><option value="">All priorities</option>{taskPriorities.map(value => <option key={value}>{value}</option>)}</select></label>
+            <label>Sort my tasks<select value={filters.sort} onChange={e => filter('sort', e.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="priority">Highest priority</option><option value="status">Status: Open first</option></select></label>
+        </div>
+        <p>{visible.length} of {tasks.length} assigned tasks</p>
+        {!visible.length && <p className="card empty-state">{tasks.length ? 'No tasks match these filters.' : 'No tasks are assigned to you yet.'}</p>}
+        <div className="task-list">{visible.map(task => <article className="card task-card" key={task.id} aria-label={`Task ${task.title}`}>
+            <div className="task-header"><h3>{task.title}</h3><StatusBadge status={task.status} /></div>
+            <p className="description">{task.description || 'No description'}</p>
+            <div className="task-meta"><PriorityBadge priority={task.priority} /><span>Created: {formatDate(task.createdAt)}<br />Updated: {formatDate(task.updatedAt)}</span></div>
+            <div className="actions personal-task-actions">
+                <button disabled={busy !== null} onClick={() => view(task.id)}>View Details</button>
+                <label>Status<select aria-label={`Status for ${task.title}`} disabled={busy !== null} value={task.status} onChange={e => changeStatus(task.id, e.target.value)}>
+                    {taskStatuses.map(value => <option key={value}>{value}</option>)}
+                </select></label>
             </div>
-        </DataState>
-    )
+        </article>)}</div>
+    </div>
 }
-
 export default Tasks

@@ -114,3 +114,14 @@ export async function deleteUser(id) { return request(`/users/${id}`, { method: 
 export async function getTask(id) { return validate(await request(`/tasks/${id}`), isTask) }
 export async function updateTask(id, task) { return validate(await request(`/tasks/${id}`, jsonOptions('PUT', task)), isTask) }
 export async function deleteTask(id) { return request(`/tasks/${id}`, { method: 'DELETE' }) }
+
+export async function updateProfile(fields) {
+    return validate(await request('/profile', jsonOptions('PUT', fields)), isUser)
+}
+
+export async function changePassword(fields) {
+    const result = await request('/profile/password', jsonOptions('PUT', fields))
+    // Notify App only after a successful change, clearing the revoked session and private workload.
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('password-changed'))
+    return result
+}

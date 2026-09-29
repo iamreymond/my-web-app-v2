@@ -1,7 +1,9 @@
 # Accounts and access control
 
 Admins manage accounts and all tasks. Users see only their assigned tasks, update
-their status, and view their own profile. There is no public registration.
+their status, and edit their own name/email and password. There is no public registration.
+See [Regular User experience](user-experience.md) for self-service validation and
+password-change session revocation.
 
 ## Upgrade an existing Stage 4 database
 
@@ -53,7 +55,7 @@ to `user`). Deliver initial credentials privately; the application sends no emai
 
 `express-session` signs an opaque cookie ID with `SESSION_SECRET`.
 `connect-pg-simple` stores session data in PostgreSQL and prunes expired records.
-Only the user ID and cookie metadata are stored in the session; roles are re-read
+Only the user ID and cookie metadata are stored in the session; roles and active status are re-read
 from users on each request. Passwords use bcryptjs with cost 12 and random salts.
 Neither plaintext passwords nor password hashes are returned by any API.
 

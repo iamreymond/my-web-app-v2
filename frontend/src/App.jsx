@@ -12,6 +12,7 @@ function App() {
     const [account, setAccount] = useState(null)
     const [checkingSession, setCheckingSession] = useState(true)
     const [sessionError, setSessionError] = useState('')
+    const [signInMessage, setSignInMessage] = useState('')
     const [sessionAttempt, setSessionAttempt] = useState(0)
     const [currentPage, setCurrentPage] = useState('dashboard')
     const [users, setUsers] = useState([])
@@ -41,13 +42,22 @@ function App() {
 
     useEffect(() => {
         function sessionExpired() {
+            accountId.current = null
             setAccount(null)
             setUsers([])
             setTasks([])
             setCurrentPage('dashboard')
         }
         window.addEventListener('session-expired', sessionExpired)
-        return () => window.removeEventListener('session-expired', sessionExpired)
+        function passwordChanged() {
+            sessionExpired()
+            setSignInMessage('Your password has been changed. Please sign in again.')
+        }
+        window.addEventListener('password-changed', passwordChanged)
+        return () => {
+            window.removeEventListener('session-expired', sessionExpired)
+            window.removeEventListener('password-changed', passwordChanged)
+        }
     }, [])
 
     // The API filters regular users' tasks. Never request the Admin user list for them.
@@ -70,7 +80,8 @@ function App() {
             if (!controller.signal.aborted) setIsLoading(false)
         })
         return () => controller.abort()
-    }, [account, loadAttempt])
+    // A profile edit updates the header without unmounting the form and losing its success feedback.
+    }, [account?.id, account?.role, loadAttempt])
 
     async function signIn(credentials) {
         const user = await api.login(credentials)
@@ -80,6 +91,7 @@ function App() {
         setCurrentPage('dashboard')
         setAccount(user)
         setLogoutError('')
+        setSignInMessage('')
     }
 
     async function signOut() {
@@ -113,6 +125,15 @@ function App() {
         const owner = account.id
         const saved = await api.updateTaskStatus(id, status)
         if (accountId.current === owner) setTasks(current => current.map(task => task.id === id ? saved : task))
+        return saved
+    }
+
+    async function saveProfile(fields) {
+        const owner = account.id
+        const saved = await api.updateProfile(fields)
+        if (accountId.current !== owner) return
+        setAccount(saved)
+        setUsers(current => current.map(user => user.id === owner ? saved : user))
     }
 
     const isAdmin = account?.role === 'admin'
@@ -147,11 +168,10 @@ function App() {
     function renderPage() {
         if (currentPage === 'users' && isAdmin) return <Users users={users} account={account} onCreateUser={createUser}
             onUpdateUser={updateUser} onStatusUser={statusUser} onDeleteUser={deleteUser} />
-        if (currentPage === 'profile') return <Profile account={account} />
+        if (currentPage === 'profile') return <Profile account={account} onSave={saveProfile} onPasswordChange={api.changePassword} />
         if (currentPage === 'tasks' && isAdmin) return <AdminTasks tasks={tasks} users={users}
             onCreateTask={createTask} onUpdateTask={updateTask} onDeleteTask={deleteTask} />
-        if (currentPage === 'tasks') return <Tasks isAdmin={isAdmin} tasks={tasks} users={users}
-            onCreateTask={createTask} onChangeTaskStatus={changeTaskStatus} />
+        if (currentPage === 'tasks') return <Tasks tasks={tasks} onChangeTaskStatus={changeTaskStatus} />
         return <Dashboard isAdmin={isAdmin} users={users} tasks={tasks} />
     }
 
@@ -175,7 +195,7 @@ function App() {
                 {logoutError && <p role="alert" className="message message-error">{logoutError}</p>}
                 <DataState isLoading={checkingSession} error={sessionError}
                     onRetry={() => setSessionAttempt(value => value + 1)}>
-                    {!account ? <Login onLogin={signIn} /> :
+                    {!account ? <><p className="message-success" role="status">{signInMessage}</p><Login onLogin={signIn} /></> :
                         <DataState isLoading={isLoading} error={loadError}
                             onRetry={() => setLoadAttempt(value => value + 1)}>{renderPage()}</DataState>}
                 </DataState>

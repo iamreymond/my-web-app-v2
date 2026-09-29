@@ -18,7 +18,8 @@ before(async () => {
     await new Promise(resolve => server.once('listening', resolve))
     baseUrl = `http://127.0.0.1:${server.address().port}`
     const original = pool.query
-    pool.query = async () => ({ rows: [{ id: 900, name: 'Test Admin', email: 'admin@example.invalid', role: 'admin', password_hash: await bcrypt.hash(testPassword, 4) }] })
+    const loginHash = await bcrypt.hash(testPassword, 4)
+    pool.query = async () => ({ rows: [{ id: 900, name: 'Test Admin', email: 'admin@example.invalid', role: 'admin', password_hash: loginHash }] })
     const response = await fetch(baseUrl + '/api/auth/login', {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'WorkTracker' },
         body: JSON.stringify({ email: 'admin@example.invalid', password: testPassword }),

@@ -97,6 +97,9 @@ Major application technologies are introduced only when their role in the archit
 See [Admin management](docs/admin-management.md) for CRUD, account status, safe deletion,
 assignment rules, filtering, and manual verification.
 
+See [Regular User experience](docs/user-experience.md) for personal workload, task
+filters, profile editing, password changes, and session behavior.
+
 ## Previous Project
 
 The original `my-web-app` project remains unchanged and serves only as a reference for previous learning and implementation experience.

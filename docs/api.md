@@ -25,6 +25,9 @@ returns 429. All account responses exclude password hashes.
 | Method | Path | Success | Purpose |
 | --- | --- | --- | --- |
 | GET | `/api/health` | 200 | Check database connectivity |
+| GET | `/api/auth/me` | 200 | Current safe account, or null |
+| PUT | `/api/profile` | 200 | Edit own name/email |
+| PUT | `/api/profile/password` | 200 | Change own password and revoke sessions |
 | GET | `/api/users` | 200 | Return users ordered by ID |
 | POST | `/api/users` | 201 | Create an active user |
 | GET | `/api/users/:id` | 200 | User details and task summary (Admin) |
@@ -40,7 +43,9 @@ returns 429. All account responses exclude password hashes.
 
 POST, PUT, and PATCH require `Content-Type: application/json` and a JSON object.
 The maximum request body size is 100 KB. Unknown fields are ignored except password,
-password_hash, and active fields in user edits, which are rejected. Task creation
+password_hash, and active fields in Admin user edits, which are rejected. Self-profile
+endpoints reject every field outside their allowlist, and User task-status requests
+reject every field except status. Task creation
 accepts a valid status and defaults to Open.
 
 ## Create a user
@@ -143,3 +148,19 @@ Both DELETE routes return a 200 JSON `{ "message": "... deleted" }` response.
 User deletion with assigned tasks and self deletion/deactivation/demotion return 409.
 The last usable Admin is protected. Deactivation and role changes revoke sessions.
 Full rules and manual checks are in [Admin management](admin-management.md).
+
+## Self-service profile and password
+
+PUT `/api/profile`: `{ "name": "My Name", "email": "me@example.com" }`.
+Only these two keys are accepted; the session supplies the account ID. Returns the
+saved safe User record. Duplicate emails return 409, validation errors 400.
+GET `/api/auth/me` and login now include `active` and `updatedAt` in safe account data.
+
+PUT `/api/profile/password` accepts `currentPassword`, `newPassword`, `confirmPassword`.
+The current password must match, confirmation must match, and the replacement must
+meet the existing 12-character/72-UTF-8-byte policy and differ from the old password.
+Success returns `{ "message": "Your password has been changed. Please sign in again." }`.
+All sessions for that account are revoked, including the current one. Wrong current
+password/invalid fields return 400; expired/inactive authentication returns 401;
+more than 10 attempts per account in 15 minutes returns 429. No credentials/hashes
+are included in responses. See [User experience](user-experience.md) for full behavior.

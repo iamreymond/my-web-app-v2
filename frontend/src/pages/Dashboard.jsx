@@ -1,5 +1,7 @@
 import DataState from '../components/DataState.jsx'
+import { personalSummary } from '../services/personal.js'
 function Dashboard({ users, tasks, isAdmin = true, isLoading = false, error = '' }) {
+    const personal = !isAdmin ? personalSummary(tasks) : null
     // Counts derive from shared state, so creating tasks and changing status update the overview.
     const openTasks = tasks.filter(
         task => task.status === 'Open'
@@ -57,6 +59,20 @@ function Dashboard({ users, tasks, isAdmin = true, isLoading = false, error = ''
                         <div className="stats-grid">{['High', 'Medium', 'Low'].map(priority => <div key={priority}>
                             <span>{priority}</span><p><strong>{tasks.filter(task => task.priority === priority).length}</strong></p>
                         </div>)}</div>
+                    </section>
+                </>}
+                {!isAdmin && <>
+                    <div className="stats-grid workload">
+                        <div className="card"><h3>Total Assigned Tasks</h3><strong>{personal.total}</strong></div>
+                        {Object.entries(personal.priorities).map(([priority, count]) => <div className="card" key={priority}>
+                            <h3>My {priority}-Priority Tasks</h3><strong>{count}</strong>
+                        </div>)}
+                    </div>
+                    <section className="card"><h3>Needs My Attention</h3>
+                        <p>Up to three unfinished tasks, highest priority first. Priority totals above include completed work.</p>
+                        {personal.attention.length ? <ul>{personal.attention.map(task => <li key={task.id}>
+                            <strong>{task.title}</strong> — {task.priority} priority · {task.status}
+                        </li>)}</ul> : <p className="empty-state">No unfinished tasks are assigned to you.</p>}
                     </section>
                 </>}
             </div>

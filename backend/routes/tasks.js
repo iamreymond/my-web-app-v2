@@ -109,6 +109,10 @@ router.patch('/:id/status', jsonBody, async (req, res, next) => {
     try {
         const { id } = req.params
         const { status } = req.body
+        // Users can only change status; a valid status must not disguise forbidden field edits.
+        if (req.account.role !== 'admin' && Object.keys(req.body).some(key => key !== 'status')) {
+            return res.status(403).json({ error: 'You may only change task status' })
+        }
         if (!/^[1-9]\d*$/.test(id) || Number(id) > 2147483647) {
             return res.status(400).json({ error: 'Task ID must be a positive integer' })
         }

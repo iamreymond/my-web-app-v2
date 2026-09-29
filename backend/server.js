@@ -7,6 +7,7 @@ const validateDatabaseEnvironment = require('./config/environment')
 
 const createSessionMiddleware = require('./config/session')
 const authRouter = require('./routes/auth')
+const profileRouter = require('./routes/profile')
 const { loadAccount, requireAccount, requireAdmin, protectWrites } = require('./middleware/auth')
 
 const app = express()
@@ -44,6 +45,7 @@ app.use('/api', (req, res, next) => {
 })
 app.use('/api', createSessionMiddleware(), protectWrites, loadAccount)
 app.use('/api/auth', authRouter)
+app.use('/api/profile', requireAccount, profileRouter)
 app.use('/api/users', requireAccount, requireAdmin, usersRouter)
 app.use('/api/tasks', requireAccount, tasksRouter)
 
