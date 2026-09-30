@@ -101,3 +101,16 @@ test('expired protected requests notify App while invalid login preserves its fo
     await assert.rejects(api.login({}), /Please sign in/)
     assert.deepEqual(events, ['session-expired'])
 })
+
+test('a canceled response cannot expire the current session', async context => {
+    const events = []
+    globalThis.window = { dispatchEvent: event => events.push(event.type) }
+    context.after(() => { delete globalThis.window })
+    const controller = new AbortController()
+    context.mock.method(globalThis, 'fetch', async () => ({
+        ok: false, status: 401, headers: new Headers({ 'content-type': 'application/json' }),
+        async json() { controller.abort(); return { error: 'Please sign in' } },
+    }))
+    await assert.rejects(api.getTasks(controller.signal))
+    assert.deepEqual(events, [])
+})

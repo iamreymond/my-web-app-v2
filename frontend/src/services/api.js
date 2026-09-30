@@ -17,6 +17,8 @@ async function request(endpoint, options = {}) {
         // A proxy error can be HTML or empty, so never display raw server content.
         const isJson = response.headers.get('content-type')?.includes('application/json')
         const data = isJson ? await response.json() : null
+        // Effect cleanup can cancel a load while its response body is being read.
+        signal.throwIfAborted()
         if (!response.ok) {
             // A session that expired elsewhere returns the UI to login; passwords never enter browser storage.
             if (response.status === 401 && endpoint !== '/auth/login' && typeof window !== 'undefined') {

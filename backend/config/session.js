@@ -4,7 +4,7 @@ const pool = require('./database')
 
 function createSessionMiddleware() {
     const secret = process.env.SESSION_SECRET
-    if (!secret || secret.length < 32 || secret === 'replace_with_a_random_secret_of_at_least_32_characters') {
+    if (!secret || secret.length < 32 || /^replace_with_a_random_secret_(of_)?at_least_32_characters$/.test(secret)) {
         throw new Error('SESSION_SECRET must be a private random value of at least 32 characters')
     }
     // Only an opaque signed ID reaches the browser. Session data stays in PostgreSQL.

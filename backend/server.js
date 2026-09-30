@@ -63,7 +63,12 @@ app.use(errorHandler)
 if (require.main === module) {
     try {
         validateDatabaseEnvironment()
-        app.listen(PORT, () => {
+        app.listen(PORT, error => {
+            if (error) {
+                console.error('Backend startup failed:', error.code || 'LISTEN_ERROR')
+                process.exitCode = 1
+                return
+            }
             console.log(`Server is running on port ${PORT}`)
         })
     } catch (error) {

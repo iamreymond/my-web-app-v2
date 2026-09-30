@@ -1,6 +1,9 @@
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
 const validate = require('../config/environment')
+const createSessionMiddleware = require('../config/session')
+const { readFileSync } = require('node:fs')
+const { join } = require('node:path')
 
 // Use temporary process values only; tests neither read nor change the real .env file.
 function withEnvironment(overrides, run) {
@@ -39,5 +42,13 @@ test('invalid ports and the example password are rejected', () => {
     }
     withEnvironment({ DB_PASSWORD: 'your_local_postgres_password' }, () => {
         assert.throws(validate, /placeholder/)
+    })
+})
+
+test('the documented session-secret placeholder cannot start a session store', () => {
+    const example = readFileSync(join(__dirname, '../.env.example'), 'utf8')
+    const placeholder = example.match(/^SESSION_SECRET=(.+)$/m)[1].trim()
+    withEnvironment({ NODE_ENV: 'test', SESSION_SECRET: placeholder }, () => {
+        assert.throws(createSessionMiddleware, /SESSION_SECRET/)
     })
 })

@@ -17,6 +17,7 @@ const loginLimiter = rateLimit({
 router.get('/me', (req, res) => res.json({ user: req.account || null }))
 
 router.post('/login', loginLimiter, jsonBody, async (req, res, next) => {
+    let createdSession = false
     try {
         const { email, password } = req.body
         if (typeof email !== 'string' || email.length > 255 ||
@@ -34,6 +35,7 @@ router.post('/login', loginLimiter, jsonBody, async (req, res, next) => {
         }
         // Replace any previous session ID after login to prevent session fixation.
         await new Promise((resolve, reject) => req.session.regenerate(error => error ? reject(error) : resolve()))
+        createdSession = true
         req.session.userId = account.id
         await new Promise((resolve, reject) => req.session.save(error => error ? reject(error) : resolve()))
         // If a password change raced with login, its session deletion may have happened before this save.
@@ -46,7 +48,13 @@ router.post('/login', loginLimiter, jsonBody, async (req, res, next) => {
         }
         const { id, name, role, active, createdAt, updatedAt } = account
         res.json({ user: { id, name, email: account.email, role, active, createdAt, updatedAt } })
-    } catch (error) { next(error) }
+    } catch (error) {
+        // A saved session must not survive an unsuccessful final database check.
+        if (createdSession && req.session) {
+            return req.session.destroy(() => next(error))
+        }
+        next(error)
+    }
 })
 
 router.post('/logout', async (req, res, next) => {

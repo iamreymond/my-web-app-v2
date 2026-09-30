@@ -144,3 +144,18 @@ test('login racing a password change destroys the newly saved stale session', as
     })
     assert.equal((await request('/auth/login', 'POST', { email: account.email, password: oldPassword }, '')).status, 401)
 })
+
+test('a failed final login check does not leave an authenticated session', async context => {
+    const original = pool.query
+    context.mock.method(console, 'error', () => {})
+    context.mock.method(pool, 'query', async (sql, values) => {
+        if (sql.includes('FOR SHARE')) throw Object.assign(new Error('Unavailable'), { code: 'ECONNREFUSED' })
+        return original(sql, values)
+    })
+    const failed = await request('/auth/login', 'POST', { email: account.email, password: oldPassword }, '')
+    assert.equal(failed.status, 500)
+    const all = await new Promise((resolve, reject) => store.all((error, rows) => error ? reject(error) : resolve(rows)))
+    // Only the pre-existing session from beforeEach should survive the failed attempt.
+    assert.equal(Object.values(all).filter(value => value.userId === account.id).length, 1)
+    assert.equal((await request('/auth/me', 'GET', undefined, failed.cookie || '')).data.user, null)
+})
