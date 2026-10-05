@@ -12,6 +12,7 @@ const { loadAccount, requireAccount, requireAdmin, protectWrites } = require('./
 
 const app = express()
 
+const HOST = process.env.HOST || '127.0.0.1'
 const PORT = process.env.PORT || 3000
 
 // Limit request size before parsing user-supplied JSON.
@@ -63,13 +64,13 @@ app.use(errorHandler)
 if (require.main === module) {
     try {
         validateDatabaseEnvironment()
-        app.listen(PORT, error => {
+        app.listen(PORT, HOST, error => {
             if (error) {
                 console.error('Backend startup failed:', error.code || 'LISTEN_ERROR')
                 process.exitCode = 1
                 return
             }
-            console.log(`Server is running on port ${PORT}`)
+            console.log(`Server is running on ${HOST}:${PORT}`)
         })
     } catch (error) {
         console.error('Backend configuration error:', error.message)
