@@ -12,6 +12,11 @@ const { loadAccount, requireAccount, requireAdmin, protectWrites } = require('./
 
 const app = express()
 
+// The backend is reached through exactly one trusted reverse proxy (Nginx).
+// This allows Express to interpret X-Forwarded-* headers correctly.
+app.set('trust proxy', 1)
+
+
 const HOST = process.env.HOST || '127.0.0.1'
 const PORT = process.env.PORT || 3000
 
